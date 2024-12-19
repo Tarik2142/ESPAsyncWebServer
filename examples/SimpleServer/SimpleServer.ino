@@ -147,6 +147,8 @@ AsyncMiddlewareFunction complexAuth([](AsyncWebServerRequest* request, ArMiddlew
 
 AuthorizationMiddleware authz([](AsyncWebServerRequest* request) { return request->getAttribute("role") == "staff"; });
 
+int wsClients = 0;
+
 /////////////////////////////////////////////////////////////////////////////////////////////////////
 
 const char* PARAM_MESSAGE PROGMEM = "message";
@@ -407,6 +409,7 @@ void setup() {
   // PERF TEST:
   // > brew install autocannon
   // > autocannon -c 10 -w 10 -d 20 http://192.168.4.1
+  // > autocannon -c 16 -w 16 -d 20 http://192.168.4.1
   server.on("/", HTTP_GET, [](AsyncWebServerRequest* request) {
     request->send(200, "text/html", htmlContent);
   });
@@ -645,10 +648,14 @@ void setup() {
   ws.onEvent([](AsyncWebSocket* server, AsyncWebSocketClient* client, AwsEventType type, void* arg, uint8_t* data, size_t len) {
     (void)len;
     if (type == WS_EVT_CONNECT) {
+      wsClients++;
+      ws.textAll("new client connected");
       Serial.println("ws connect");
       client->setCloseClientOnQueueFull(false);
       client->ping();
     } else if (type == WS_EVT_DISCONNECT) {
+      wsClients--;
+      ws.textAll("client disconnected");
       Serial.println("ws disconnect");
     } else if (type == WS_EVT_ERROR) {
       Serial.println("ws error");
@@ -674,6 +681,7 @@ void setup() {
   //
   // some perf tests:
   // launch 16 concurrent workers for 30 seconds
+  // > for i in {1..10}; do ( count=$(gtimeout 30 curl -s -N -H "Accept: text/event-stream" http://192.168.4.1/events 2>&1 | grep -c "^data:"); echo "Total: $count events, $(echo "$count / 4" | bc -l) events / second" ) & done;
   // > for i in {1..16}; do ( count=$(gtimeout 30 curl -s -N -H "Accept: text/event-stream" http://192.168.4.1/events 2>&1 | grep -c "^data:"); echo "Total: $count events, $(echo "$count / 4" | bc -l) events / second" ) & done;
   //
   // With AsyncTCP, with 16 workers: a lot of "Event message queue overflow: discard message", no crash
@@ -758,6 +766,8 @@ uint32_t deltaSSE = 10;
 uint32_t lastWS = 0;
 uint32_t deltaWS = 100;
 
+uint32_t lastHeap = 0;
+
 void loop() {
   uint32_t now = millis();
   if (now - lastSSE >= deltaSSE) {
@@ -771,4 +781,10 @@ void loop() {
     // }
     lastWS = millis();
   }
+#ifdef ESP32
+  if (now - lastHeap >= 2000) {
+    Serial.printf("Free heap: %" PRIu32 "\n", ESP.getFreeHeap());
+    lastHeap = now;
+  }
+#endif
 }
