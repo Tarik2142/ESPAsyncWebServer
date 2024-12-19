@@ -167,7 +167,7 @@ AsyncEventSourceClient::AsyncEventSourceClient(AsyncWebServerRequest* request, A
   _client->onPoll([](void* r, AsyncClient* c) { (void)c; static_cast<AsyncEventSourceClient*>(r)->_onPoll(); }, this);
   _client->onData(NULL, NULL);
   _client->onTimeout([this](void* r, AsyncClient* c __attribute__((unused)), uint32_t time) { static_cast<AsyncEventSourceClient*>(r)->_onTimeout(time); }, this);
-  _client->onDisconnect([this](void* r, AsyncClient* c) { static_cast<AsyncEventSourceClient*>(r)->_onDisconnect(); delete c; }, this);
+  _client->onDisconnect([this](void* r, AsyncClient* c) { if (r) static_cast<AsyncEventSourceClient*>(r)->_onDisconnect(); delete c; }, this);
 
   _server->_addClient(this);
   delete request;
